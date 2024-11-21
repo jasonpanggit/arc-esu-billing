@@ -23,8 +23,13 @@ esu-arc-enabled-server-mgmt.csv file with the following columns:
 5. Core Count - number of cores detected in the arc enabled server
 6. ESU Eligibility (Eligible/Inligible) - whether the arc enabled server is eligible for ESU
 7. ESU Status (Assigned/NotAssigned) - whether an ESU license is assigned to the arc enabled server
-8. ESU License Name - name of the ESU license assigned to the arc enabled server
-9. ESU License Cost (Est.) - estimated cost incurred by the ESU license assigned to the arc enabled server
-10. ESU License Back Billing Cost (Est.) - estimated back billing cost incurred by the ESU license assigned to the arc enabled server
-11. Total Cost (Est.) - estimated total cost incurred by the ESU license assigned to the arc enabled server
-12. Tags - tags assigned to the arc enabled server (recommended to add tags to arc enabled server during onboarding)
+8. License Name - name of the ESU license assigned to the arc enabled server
+9. License State (Activated/Deactivated) - state of the ESU license 
+10. License Target (Windows Server 2012/Windows Server 2012 R2) - target of the ESU license
+11. License Edition (Standard/Datacenter) - edition of the ESU license
+12. License Core Type (pCore/vCore) - type of the ESU license
+13. License Core Count - number of cores covered by the ESU license
+14. ESU License Cost (Est.) - estimated cost incurred by the ESU license assigned to the arc enabled server
+15. ESU License Back Billing Cost (Est.) - estimated back billing cost incurred by the ESU license assigned to the arc enabled server
+16. Total Cost (Est.) - estimated total cost incurred by the ESU license assigned to the arc enabled server
+17. Tags - tags assigned to the arc enabled server (recommended to add tags to arc enabled server during onboarding)
