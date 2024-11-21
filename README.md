@@ -1,4 +1,4 @@
-# Introduction
+# Arc ESU License Management
 This PowerShell script reads subscription ids from a file and generate a CSV file that contains ESU license assignment details and its cost for all Azure Arc enabled servers within a subscription.
 
 # Scenarios
