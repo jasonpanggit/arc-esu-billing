@@ -1,9 +1,13 @@
 ##########################################################################################################################################
-# This PowerShell script reads subscription ids from a file and generate a CSV file that contains ESU license assignment details 
+# This PowerShell script reads subscription ids from a file and generate a Excel file that contains ESU licenses assignment details 
 # and its cost for all Azure Arc enabled servers within a subscription.
 #
+# Need to install ImportExcel module by running Install-Module -Name ImportExcel -Scope CurrentUser
 # Author: Jason Pang
 # ##########################################################################################################################################
+
+# Add this at the beginning of your script to import the module
+Import-Module ImportExcel
 
 # Get the access token
 $token = (Get-AzAccessToken).Token
@@ -12,26 +16,18 @@ $headers = @{
     "Content-Type" = "application/json; charset=utf-8"
 }
 
-# array to hold ESU management details
-$esuArcEnabledServerManagement = @()
+# array to hold ESU licenses details in CSV format
+$licensesDetailsCSV = @()
 # csv headers
-$esuArcEnabledServerManagement += "Subscription Id,Resource Group,Arc-Enabled Server Name,OS Version,Core Count,ESU Eligibility,ESU Status,License Name,License State,License Target,License Edition,License Core Type,License Core Count,License Cost (Est.),License Back Billing Cost (Est.),License Total Cost (Est.),Tags" 
-    
+$licensesDetailsCSV += "Subscription Id,License Name,License State,License Target,License Edition,License Core Type,License Core Count,Tags,License Cost (Est.),License Back Billing Cost (Est.),License Total Cost (Est.),Cores Assigned,Cores Unassigened"
+
+# array to hold ESU management details
+$arcEnabledServersCSV = @()
+# csv headers
+$arcEnabledServersCSV += "Subscription Id,Resource Group,Arc-Enabled Server Name,OS Version,Core Count,ESU Eligibility,ESU Status,Assigned License Name,Tags"
+
 # read subscription ids from file
 foreach($subscriptionId in Get-Content .\subscriptions.txt) {
-
-    # hash table to store ESU license details
-    $licensesDetails = @{}
-
-    # Get ESU licenses by subscription
-    $uri = "https://management.azure.com/subscriptions/$subscriptionId/providers/Microsoft.HybridCompute/licenses?api-version=2024-07-10"
-    $licensesDetailsResponse = Invoke-RestMethod -Method Get -Uri $uri -Headers $headers | ConvertTo-Json -Depth 100
-    $licensesDetailsJson = $licensesDetailsResponse | ConvertFrom-Json
-    $licensesDetailsJson.value | ForEach-Object {
-        #Write-Output $_.name $_.properties.licenseDetails
-        $licenseName = $_.name
-        $licensesDetails.add($licenseName, $_.properties.licenseDetails)
-    }
 
     # Get ESU usage details by subscription
     # TODO: add tag to ESU license so that we can filter the response
@@ -77,11 +73,9 @@ foreach($subscriptionId in Get-Content .\subscriptions.txt) {
             }
         }
     }
-
-    # $licenseUsages.keys | ForEach-Object {
-    #     $message = 'License: {0} Cost: {1}' -f $_, $licenseUsages[$_]
-    #     Write-Output $message
-    # }
+    
+    # hash table to store ESU license utilization details
+    $licensesUtilization = @{}
 
     # Get arc enabled servers by subscription    
     $uri = "https://management.azure.com/subscriptions/$subscriptionId/providers/Microsoft.HybridCompute/machines?api-version=2024-07-10"
@@ -99,8 +93,6 @@ foreach($subscriptionId in Get-Content .\subscriptions.txt) {
         $licenseAssignmentState = $licenseProfile.esuProfile.licenseAssignmentState
         
         $licenseName = ""
-        $licenseCost = ""
-        $licenseBackbillingCost = ""
         if ($licenseAssignmentState -eq "Assigned") {
             # Get ESU license profile assigned to arc enabled server
             $uri = "https://management.azure.com/subscriptions/$subscriptionId/resourceGroups/$resourceGroup/providers/Microsoft.HybridCompute/machines/$machineName/licenseProfiles?api-version=2024-07-10"
@@ -110,16 +102,46 @@ foreach($subscriptionId in Get-Content .\subscriptions.txt) {
                 $licenseId = $_.properties.esuProfile.assignedLicense
                 #Write-Output "License Id: $licenseId"
                 $licenseName = $licenseId.Split("/")[8]
-                $licenseCost = $licenseUsages[$licenseId]
-                $licenseBackbillingCost = $licenseBackbillingUsages[$licenseId]
             }
         }
-        $licenseDetails = $licensesDetails[$licenseName] 
-        $licenseTotalCost = [double] $licenseCost + [double] $licenseBackbillingCost 
-        $tags = $_.tags
+        
+        # update license utilization
+        if ($licensesUtilization.ContainsKey($licenseName)) {
+            $licensesUtilization[$licenseName] = [int] $licensesUtilization[$licenseName] + [int] $coreCount
+        } else {
+            $licensesUtilization.add($licenseName, [int] $coreCount)
+        }
+
         Write-Output "Found arc enabled server: $machineName with ESU eligibility: $esuEligibility and license assignment state: $licenseAssignmentState"
-        # $esuArcEnabledServerManagement += "$subscriptionId,$resourceGroup,$machineName,$osName $osVersion,$coreCount,$esuEligibility,$licenseAssignmentState,$licenseName,$licenseDetail.state,$licenseDetail.target,$licenseDetail.edition,$licenseDetail.type,$licenseDetail.processors,$licenseCost,$licenseBackbillingCost,$licenseTotalCost,$tags"
-        $esuArcEnabledServerManagement += "$subscriptionId,$resourceGroup,$machineName,$osName $osVersion,$coreCount,$esuEligibility,$licenseAssignmentState,$licenseName,$($licenseDetails.state),$($licenseDetails.target),$($licenseDetails.edition),$($licenseDetails.type),$($licenseDetails.processors),$licenseCost,$licenseBackbillingCost,$licenseTotalCost,$tags"
+        $arcEnabledServersCSV += "$subscriptionId,$resourceGroup,$machineName,$osName $osVersion,$coreCount,$esuEligibility,$licenseAssignmentState,$licenseName,$($_.tags)"
+    }
+
+    # Get ESU licenses by subscription
+    $uri = "https://management.azure.com/subscriptions/$subscriptionId/providers/Microsoft.HybridCompute/licenses?api-version=2024-07-10"
+    $licensesDetailsResponse = Invoke-RestMethod -Method Get -Uri $uri -Headers $headers | ConvertTo-Json -Depth 100
+    $licensesDetailsJson = $licensesDetailsResponse | ConvertFrom-Json
+    $licensesDetailsJson.value | ForEach-Object {
+        #Write-Output $_.name $_.properties.licenseDetails
+        $licenseName = $_.name
+        $tags = $_.tags       
+        $licenseCost = [double] $licenseUsages[$_.id]
+        $licenseBackbillCost = [double] $licenseBackbillingUsages[$_.id]
+        $totalCost = $licenseCost + $licenseBackbillCost
+        $processors = [int] $_.properties.licenseDetails.processors
+        $coreAssigned = [int] $licensesUtilization[$licenseName]
+        $coreUnasssigned = $_.properties.licenseDetails.processors - $coreAssigned
+        $licensesDetailsCSV += "$subscriptionId,$licenseName,$($_.properties.licenseDetails.state),$($_.properties.licenseDetails.target),$($_.properties.licenseDetails.edition),$($_.properties.licenseDetails.type),$processors,$tags,$licenseCost,$licenseBackbillCost,$totalCost,$coreAssigned,$coreUnasssigned"
     }
 }
-$esuArcEnabledServerManagement | Out-File -FilePath "esu-arc-enabled-server-mgmt.csv" 
+
+# Convert arrays to CSV format
+$licensesDetailsCSVString = $licensesDetailsCSV -join "`n"
+$arcEnabledServersCSVString = $arcEnabledServersCSV -join "`n"
+
+# Convert CSV strings to data tables
+$licensesDetailsDataTable = ConvertFrom-Csv -InputObject $licensesDetailsCSVString
+$arcEnabledServersDataTable = ConvertFrom-Csv -InputObject $arcEnabledServersCSVString
+
+$excelFilePath = "./arc-esu-mgmt.xlsx"
+$licensesDetailsDataTable | Export-Excel -Path $excelFilePath -WorksheetName "Licenses Details" -AutoSize
+$arcEnabledServersDataTable | Export-Excel -Path $excelFilePath -WorksheetName "Arc Enabled Servers" -AutoSize
