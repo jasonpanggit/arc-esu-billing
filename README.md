@@ -7,15 +7,17 @@ This PowerShell script reads subscription ids from a file and generate a CSV fil
 
 # How to run script
 1. Clone repo
-2. Create subscriptions.txt file in the same repo and put the subscription id(s) line by line
-3. Login to Azure by running Connect-AzAccount in command prompt and authenticate accordingly
-4. Execute powershell script and check the generated CSV file
+2. Install ImportExcel module by running Install-Module -Name ImportExcel -Scope CurrentUser
+3. Create subscriptions.txt file in the same repo and put the subscription id(s) line by line
+4. Login to Azure by running Connect-AzAccount in command prompt and authenticate accordingly
+5. Execute arc-esu-billing.ps1 PowerShell script to generate the Excel file
 
 # Input  
-subscriptions.txt file that contains subscription ids that contains Azure Arc enabled servers
+subscriptions.txt file that contains subscription ids of ESU licenses and Azure Arc enabled servers
 
 # Output
 arc-esu-mgmt.xlsx file with the following worksheets and columns:
+
 License Details worksheet
 1. Subscription Id - subscription id of the ESU license
 2. License Name - name of the ESU license 
